@@ -1,0 +1,8 @@
+export const MONTHLY_CONTRIBUTION = 10_000
+export const MEMBER_PAYOUT_AMOUNT = 200_000
+export const STAFF_PAYOUT_AMOUNT = 100_000
+export const FUND_MINIMUM_BALANCE = 200_000
+export const PAYOUT_MONTHS = 2
+export const CONTRIBUTION_DUE_DAY = 5
+export const CONTRIBUTION_GRACE_DAY = 10
+export const MAX_MISSED_MONTHS = 2

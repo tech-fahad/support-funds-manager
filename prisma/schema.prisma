@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  pending
+  member
+  suspended
+  office_staff
+  trustee
+}
+
+enum ContributionStatus {
+  on_time
+  late
+  missed
+}
+
+enum ClaimType {
+  layoff
+  forced_resignation
+}
+
+enum ClaimStatus {
+  pending
+  approved
+  rejected
+  waiting
+  active
+  completed
+  closed
+}
+
+enum PayoutStatus {
+  pending
+  approved
+  transfer_uploaded
+  paid
+}
+
+enum VoteChoice {
+  yes
+  no
+  abstain
+}
+
+enum ProposalType {
+  rule_change
+  trustee_election
+  add_office_staff
+}
+
+enum ProposalStatus {
+  open
+  passed
+  failed
+  cancelled
+}
+
+model Member {
+  id             String    @id @default(cuid())
+  userId         String    @unique @map("user_id")
+  name           String
+  phone          String?
+  email          String    @unique
+  role           Role      @default(pending)
+  joinedAt       DateTime  @default(now()) @map("joined_at")
+  approvedAt     DateTime? @map("approved_at")
+  approvedById   String?   @map("approved_by_id")
+  leftAt         DateTime? @map("left_at")
+  pledgeSignedAt DateTime? @map("pledge_signed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  contributions         Contribution[]
+  claims                Claim[]        @relation("MemberClaims")
+  filedClaims           Claim[]        @relation("FiledClaims")
+  recordedContributions Contribution[] @relation("RecordedContributions")
+  payouts               Payout[]
+  votes                 Vote[]
+  proposals             Proposal[]
+  auditLogs             AuditLog[]
+
+  @@map("members")
+}
+
+model Contribution {
+  id           String             @id @default(cuid())
+  memberId     String             @map("member_id")
+  month        String             // YYYY-MM
+  amount       Int                // in PKR
+  paidAt       DateTime?          @map("paid_at")
+  status       ContributionStatus
+  recordedById String?            @map("recorded_by_id")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  member     Member  @relation(fields: [memberId], references: [id])
+  recordedBy Member? @relation("RecordedContributions", fields: [recordedById], references: [id])
+
+  @@unique([memberId, month])
+  @@map("contributions")
+}
+
+model Claim {
+  id                  String      @id @default(cuid())
+  memberId            String      @map("member_id")
+  noticeDate          DateTime    @map("notice_date")
+  noticePeriodEndDate DateTime    @map("notice_period_end_date")
+  type                ClaimType
+  status              ClaimStatus @default(pending)
+  queuePosition       Int?        @map("queue_position")
+  queueEnteredAt      DateTime?   @map("queue_entered_at")
+  approvedById        String?     @map("approved_by_id")
+  approvedAt          DateTime?   @map("approved_at")
+  rejectedReason      String?     @map("rejected_reason")
+  filedById           String?     @map("filed_by_id")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  member  Member   @relation("MemberClaims", fields: [memberId], references: [id])
+  filedBy Member?  @relation("FiledClaims", fields: [filedById], references: [id])
+  payouts Payout[]
+
+  @@map("claims")
+}
+
+model Payout {
+  id                   String       @id @default(cuid())
+  claimId              String       @map("claim_id")
+  memberId             String       @map("member_id")
+  monthNumber          Int          @map("month_number") // 1 or 2
+  amount               Int          // in PKR
+  status               PayoutStatus @default(pending)
+  approvedById1        String?      @map("approved_by_id_1")
+  approvedById2        String?      @map("approved_by_id_2")
+  approvedAt           DateTime?    @map("approved_at")
+  transferDocumentUrl  String?      @map("transfer_document_url")
+  transferUploadedById String?      @map("transfer_uploaded_by_id")
+  transferUploadedAt   DateTime?    @map("transfer_uploaded_at")
+  paymentConfirmedById String?      @map("payment_confirmed_by_id")
+  paidAt               DateTime?    @map("paid_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  claim  Claim  @relation(fields: [claimId], references: [id])
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@map("payouts")
+}
+
+model Proposal {
+  id              String         @id @default(cuid())
+  type            ProposalType
+  title           String
+  description     String
+  proposedById    String         @map("proposed_by_id")
+  proposedAt      DateTime       @default(now()) @map("proposed_at")
+  status          ProposalStatus @default(open)
+  votingDeadline  DateTime       @map("voting_deadline")
+  resultAppliedAt DateTime?      @map("result_applied_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  proposedBy Member @relation(fields: [proposedById], references: [id])
+  votes      Vote[]
+
+  @@map("proposals")
+}
+
+model Vote {
+  id         String     @id @default(cuid())
+  proposalId String     @map("proposal_id")
+  memberId   String     @map("member_id")
+  vote       VoteChoice
+  votedAt    DateTime   @default(now()) @map("voted_at")
+
+  proposal Proposal @relation(fields: [proposalId], references: [id])
+  member   Member   @relation(fields: [memberId], references: [id])
+
+  @@unique([proposalId, memberId])
+  @@map("votes")
+}
+
+model MonthlyReport {
+  id               String    @id @default(cuid())
+  month            String    // YYYY-MM
+  totalIn          Int       @map("total_in")
+  totalOut         Int       @map("total_out")
+  balance          Int
+  activeMembers    Int       @map("active_members")
+  suspendedMembers Int       @map("suspended_members")
+  membersInArrears Int       @map("members_in_arrears")
+  publishedAt      DateTime? @map("published_at")
+  publishedById    String?   @map("published_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@unique([month])
+  @@map("monthly_reports")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String   @map("actor_id")
+  action    String
+  entity    String
+  entityId  String   @map("entity_id")
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  actor Member @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
